@@ -29,8 +29,18 @@ export default function CompassScreen({ navigation }) {
 
     const askForPermission = async () => {
       // TODO a) Ask for location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setSnack("Location permission denied");
+        return;
+      }
 
       // TODO b) Get One-time position and save the coordinates
+      const pos = await Location.getCurrentPositionAsync({});
+        setCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
 
       //* (GIVEN): Heading watcher (0..360 degrees)
       headingSub = await Location.watchHeadingAsync(({ trueHeading }) => {
@@ -97,7 +107,17 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(2): push new pin {id, lat, lon, heading, ts} to state and savePins(next)
-    setSnack("TODO: save pin");
+    const newPin = {
+      id: Date.now().toString(),
+      lat: coords.latitude,
+      lon: coords.longitude,
+      heading: heading,
+      ts: nowISO(),
+    };
+    const next = [newPin, ...pins];
+    setPins(next);
+    await savePins(next);
+    setSnack("Pin saved!");
   };
 
   const copyCoords = async () => {
@@ -106,6 +126,9 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(3): Clipboard.setStringAsync("lat, lon") then snackbar
+    const text = `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+    await Clipboard.setStringAsync(text);
+    setSnack("Copied to clipboard!");
   };
 
   const shareCoords = async () => {
@@ -114,6 +137,12 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(4): Share.share with message including coords + heading + cardinal
+    const message = `I am here: ${coords.latitude.toFixed(
+      6
+    )}, ${coords.longitude.toFixed(6)} (${toCardinal(
+      heading ?? 0
+    )} ${Math.round(heading ?? 0)}°)`;
+    await Share.share({ message });
   };
 
   // Make DARK end point opposite heading: add 180°
