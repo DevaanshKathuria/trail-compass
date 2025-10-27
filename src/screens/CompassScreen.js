@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, StyleSheet, Share, Animated, Easing } from "react-native";
+import { View, StyleSheet, Animated, Easing } from "react-native";
 import {
   Appbar,
   Card,
@@ -11,6 +11,7 @@ import {
 } from "react-native-paper";
 import * as Location from "expo-location";
 import * as Clipboard from "expo-clipboard";
+import { Share } from "expo-sharing";
 import { LinearGradient } from "expo-linear-gradient";
 import { fmt, toCardinal, nowISO } from "../utils/geo";
 import { loadPins, savePins } from "../storage";
@@ -29,8 +30,24 @@ export default function CompassScreen({ navigation }) {
 
     const askForPermission = async () => {
       // TODO a) Ask for location permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setSnack("Location permission denied");
+        return;
+      }
 
       // TODO b) Get One-time position and save the coordinates
+      try {
+        const position = await Location.getCurrentPositionAsync();
+        if (mounted) {
+          setCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        }
+      } catch (error) {
+        setSnack("Failed to get location");
+      }
 
       //* (GIVEN): Heading watcher (0..360 degrees)
       headingSub = await Location.watchHeadingAsync(({ trueHeading }) => {
@@ -97,7 +114,17 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(2): push new pin {id, lat, lon, heading, ts} to state and savePins(next)
-    setSnack("TODO: save pin");
+    const newPin = {
+      id: Date.now().toString(), 
+      lat: coords.latitude,
+      lon: coords.longitude,
+      heading: pointsForHeading,
+      ts: nowISO(),
+    };
+    const nextPins = [newPin, ...pins];
+    setPins(nextPins);
+    await savePins(nextPins);
+    setSnack("Pin saved");
   };
 
   const copyCoords = async () => {
@@ -106,6 +133,9 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(3): Clipboard.setStringAsync("lat, lon") then snackbar
+    const coordsString = `${fmt(coords.latitude)}, ${fmt(coords.longitude)}`;
+    await Clipboard.setStringAsync(coordsString);
+    setSnack("Coordinates copied");
   };
 
   const shareCoords = async () => {
@@ -114,6 +144,11 @@ export default function CompassScreen({ navigation }) {
       return;
     }
     // TODO(4): Share.share with message including coords + heading + cardinal
+      const cardinal = toCardinal(heading ?? 0);
+      const message = `${fmt(coords.latitude)}, ${fmt(coords.longitude)} (${cardinal} ${Math.round(heading ?? 0)}°)`;
+      await Share.share({ message });
+      setSnack("Location shared");
+    
   };
 
   // Make DARK end point opposite heading: add 180°

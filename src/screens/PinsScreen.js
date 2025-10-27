@@ -2,23 +2,45 @@ import React, { useEffect, useState } from "react";
 import { View, StyleSheet, Share } from "react-native";
 import { Card, List, IconButton, Text, Snackbar } from "react-native-paper";
 import { loadPins, savePins } from "../storage";
+import { toCardinal } from "../utils/geo";
 
 export default function PinsScreen() {
   const [pins, setPins] = useState([]);
   const [snack, setSnack] = useState("");
 
   useEffect(() => {
-    // TODO(5): Load saved pins into state on mount
+    let mounted = true;
+    const loadData = async () => {
+      const saved = await loadPins();
+      if (mounted) {
+        setPins(saved || [])
+      };
+    };
+    loadData();
+    return () => { mounted = false };
   }, []);
 
   const remove = async (id) => {
-    // TODO(6): Delete pin by id and persist via savePins(next)
-    setSnack("TODO: delete pin");
+    try {
+      const nextPins = pins.filter(p => p.id !== id);
+      setPins(nextPins);
+      await savePins(nextPins);
+      setSnack("Pin Deleted");
+    } catch (e) {
+      setSnack("Failed to delete pin");
+    }
   };
 
   const sharePin = async (p) => {
-    // TODO(7): Share pin location nicely (include timestamp if you like)
-    setSnack("TODO: share pin");
+    try {
+      const cardinal = toCardinal(p.heading);
+      const date = new Date(p.ts).toLocaleString();
+      const message = `Location Pin: Latitude: ${p.lat} Longitude: ${p.lon} Heading: ${cardinal}Saved on: ${date}`;
+      await Share.share({ message });
+      setSnack("Pin Shared");
+    } catch (e) {
+      setSnack("Failed to share pin");
+    }
   };
 
   return (
@@ -37,13 +59,8 @@ export default function PinsScreen() {
                   description={new Date(p.ts).toLocaleString()}
                   left={(props) => <List.Icon {...props} icon="map-marker" />}
                   right={() => (
-                    <View
-                      style={{ flexDirection: "row", alignItems: "center" }}
-                    >
-                      <IconButton
-                        icon="share-variant"
-                        onPress={() => sharePin(p)}
-                      />
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <IconButton icon="share-variant" onPress={() => sharePin(p)} />
                       <IconButton icon="delete" onPress={() => remove(p.id)} />
                     </View>
                   )}
@@ -54,11 +71,7 @@ export default function PinsScreen() {
         </Card.Content>
       </Card>
 
-      <Snackbar
-        visible={!!snack}
-        onDismiss={() => setSnack("")}
-        duration={1200}
-      >
+      <Snackbar visible={!!snack} onDismiss={() => setSnack("")} duration={1200}>
         {snack}
       </Snackbar>
     </View>
